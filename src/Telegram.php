@@ -28,8 +28,8 @@ class Telegram
         private ?string $chatId = null, 
         private ?string $apiKey = null,
         private array|string|null $proxys = null,
-        private ?bool $verify  = true,      // ← Аргумент должен быть здесь
-        private ?int  $timeout = 30     // ← Аргумент должен быть здесь
+        private ?bool $verify  = true,
+        private ?int  $timeout = 30
     ) {
         $this->apiUrl ??= $this->config['apiUrl'] ?? config('services.tgbot.apiUrl');
 		$this->apiKey ??= $this->config['apiKey'] ?? config('services.tgbot.apiKey');
@@ -66,9 +66,8 @@ class Telegram
                 $result = $response->json();
                 logger()->warning('HTTP failed', [
                     'method' => $method,
-                    'url' => $this->apiUrl . $this->apiKey . '/' . $method,
                     'status' => $response->status(),
-                    'body' => $response->body(),
+                    'body'   => $response->body(),
                     'parsed' => $result,
                 ]);
 
@@ -84,9 +83,7 @@ class Telegram
                 logger()->warning("API response missing 'result' key", ['response' => $result]);
                 return false;
             }
-
             return $result['result'];
-
         } catch(\Throwable $e) {
             logger()->error('Exception in apiRequest', [
                 'method' => $method, 'message' => $e->getMessage(),
@@ -148,18 +145,13 @@ class Telegram
      */
     private function buildProxyString(): string|array|null
     {
-        // Локальная переменная для сужения типов
         $proxy = $this->proxys;
-
         if (empty($proxy)) {
             return null;
         }
-
         if (is_string($proxy)) {
             return $proxy;
         }
-
-        // Поддержка формата Guzzle ['http' => ..., 'https' => ...]
         if (isset($proxy['http']) || isset($proxy['https'])) {
             return $proxy;
         }
@@ -185,8 +177,7 @@ class Telegram
         }
         
         $result.= $host;
-        
-        // 🔑 ИСПРАВЛЕНИЕ: убираем "!== null", потому что isset() уже это гарантирует
+
         if (isset($proxy['port']) && $proxy['port'] !== '') {
             $result.= ':' . $proxy['port'];
         }
