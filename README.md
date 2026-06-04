@@ -5,6 +5,7 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/spolokh/telegram.svg)](https://packagist.org/packages/spolokh/telegram)
 
 Лёгкая обёртка над Telegram Bot API для Laravel 10/11/12 с использованием `Http::` facade.
+Будет развиваться.
 
 ## Установка
 
