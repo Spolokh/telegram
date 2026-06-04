@@ -1,0 +1,11 @@
+/vendor/
+/node_modules/
+composer.lock
+.phpunit.result.cache
+.phpstan.result.cache
+*.log
+.env
+.idea/
+.vscode/
+.DS_Store
+tests/fixtures/*.tmp
