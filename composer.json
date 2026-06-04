@@ -32,7 +32,7 @@
         }
     },
     "scripts": {
-        "test": "phpunit",
+        "test": "phpunit --no-coverage",
         "analyse": "phpstan analyse src --level=6",
         "fix": "php-cs-fixer fix --config=.php-cs-fixer.php"
     },
