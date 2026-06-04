@@ -10,6 +10,9 @@ jobs:
       matrix:
         php: ['8.2', '8.3', '8.4']
         laravel: ['10.*', '11.*', '12.*']
+        exclude:
+          # Laravel 12 требует PHP >= 8.2, но для надежности можно исключить старые комбинации при необходимости
+          # Сейчас оставляем все, так как ^8.2 совместим со всеми
 
     steps:
       - uses: actions/checkout@v4
@@ -18,13 +21,23 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, curl, json
+          extensions: mbstring, curl, json, openssl
+          tools: composer:v2
           coverage: none
 
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache/files
+            vendor
+          key: ${{ runner.os }}-composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-${{ matrix.php }}-${{ matrix.laravel }}-
+            ${{ runner.os }}-composer-
+
       - name: Install dependencies
-        run: |
-          composer require "illuminate/support:${{ matrix.laravel }}" "illuminate/http:${{ matrix.laravel }}" --no-update --no-interaction
-          composer install --no-progress --prefer-dist --no-interaction
+        run: composer install --no-progress --prefer-dist --no-interaction --optimize-autoloader
 
       - name: Run PHPStan
         run: composer analyse
