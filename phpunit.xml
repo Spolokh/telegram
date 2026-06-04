@@ -4,7 +4,7 @@
   bootstrap="vendor/autoload.php"
   colors="true"
   stopOnFailure="false"
-  displayDetailsOnTestsThatTriggerWarnings="true">
+  failOnWarning="false">
 
     <testsuites>
         <testsuite name="Telegram Package Test Suite">
