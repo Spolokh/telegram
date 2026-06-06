@@ -11,3 +11,17 @@
 
 ```bash
 composer require spolokh/telegram
+
+## Пример использования
+
+```php
+include (__DIR__ . '/vendor/autoload.php');
+
+$config = [
+  'apiUrl' => env('TG_APIURL', 'https://api.telegram.org/'),
+  'apiKey' => env('TG_APIKEY'),
+  'chatId' => env('TG_CHATID'),
+];
+
+$telegram = (new Telegram($config))->sendMessage('Hallo world!');
+
