@@ -14,10 +14,11 @@ composer require spolokh/telegram
 
 ## Пример использования
 
-```php
 
 <?php
 include (__DIR__ . '/vendor/autoload.php');
+
+use Spolokh\Telegram\Telegram;
 
 $config = [
   'apiUrl' => env('TG_APIURL', 'https://api.telegram.org/'),
