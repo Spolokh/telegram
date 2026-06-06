@@ -15,6 +15,8 @@ composer require spolokh/telegram
 ## Пример использования
 
 ```php
+
+<?php
 include (__DIR__ . '/vendor/autoload.php');
 
 $config = [
