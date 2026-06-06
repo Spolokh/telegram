@@ -22,7 +22,7 @@ include (__DIR__ . '/vendor/autoload.php');
 use Spolokh\Telegram\Telegram;
 
 $config = [
-  'apiUrl' => env('TG_APIURL', 'https://api.telegram.org/'),
+  'apiUrl' => env('TG_APIURL'),
   'apiKey' => env('TG_APIKEY'),
   'chatId' => env('TG_CHATID'),
 ];
