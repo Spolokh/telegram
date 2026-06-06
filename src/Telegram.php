@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Spolokh\Telegram;
 
+use CURLFile;
+use Throwable;
 use RuntimeException;
+use InvalidArgumentException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\{
-    RequestException,
-    ConnectionException,
+    RequestException, ConnectionException,
 };
 
 class Telegram
@@ -51,42 +53,26 @@ class Telegram
      */
     private function apiRequest( string $method, array $data = [] ): array|false
     {
-        $request = Http::withOptions([
+        $host = $this->apiUrl . $this->apiKey . '/' . $method;
+        try {
+            $request = Http::withOptions([
                 'timeout' => $this->timeout,
-                'verify'  => $this->verify,
-                'proxy'   => $this->buildProxyString()
+                'verify' => $this->verify,
+                'proxy' => $this->buildProxyString()
             ])
             ->retry(3, 100, fn($e) =>
                 $e instanceof ConnectionException, throw: false
-            );
+            )
+            ->post($host, $data)
+            ->throw()
+            ->json();
 
-        try {
-            $response = $request->post($this->apiUrl . $this->apiKey . '/' . $method, $data);
-            if ($response->failed()) {
-                $result = $response->json();
-                logger()->warning('HTTP failed', [
-                    'method' => $method,
-                    'status' => $response->status(),
-                    'body'   => $response->body(),
-                    'parsed' => $result,
-                ]);
+            return ($request['ok'] ?? false) ? ($request['result'] ?? false) : false;
 
-                if (!($result['ok'] ?? false)) {
-                    logger()->warning('Telegram API error: ' . ($result['description'] ?? 'Unknown'));
-                    return false;
-                }
-                return false;
-            }
-
-            $result = $response->json(); // Если 'result' нет — это ошибка, возвращаем false, а не пустой массив
-            if (!isset($result['result'])) {
-                logger()->warning("API response missing 'result' key", ['response' => $result]);
-                return false;
-            }
-            return $result['result'];
-        } catch(\Throwable $e) {
-            logger()->error('Exception in apiRequest', [
-                'method' => $method, 'message' => $e->getMessage(),
+        } catch (Throwable $e) {
+            logger()->error('Telegram API failed', [
+                'method'  => $method,
+                'message' => $e->getMessage()
             ]);
             return false;
         }
@@ -96,24 +82,148 @@ class Telegram
      * Отправка текстового сообщения
      *
      * @param string $text Текст сообщения
+     * @param string|null $chatId ID чата (переопределяет дефолтный)
      * @param string $parseMode Режим парсинга: HTML, Markdown, MarkdownV2
      * @param bool $withPreview Показывать превью ссылок
-     * @param string|null $chatId ID чата (переопределяет дефолтный)
      * @return array<string, mixed>|false
      */
-    public function sendMessage(string $text, string $parseMode = 'HTML', bool $withPreview = true, string|null $chatId = null): array|false
+    public function sendMessage(string $text, ?string $chatId = null, string $parseMode = 'HTML', bool $withPreview = true): array|false
     {
-        /** @var array<string, mixed> $data */
-        $data = [
-			'chat_id' => $this->chatId,
-			'text'	  => $text,
+        return $this->apiRequest('sendMessage', $this->setData($chatId, [
+			'text' => $text,
 			'parse_mode' => $parseMode,
 			'disable_web_page_preview' => $withPreview,
 			'disable_notification' => false,
-			'reply_to_message_id'  => NULL
-		];
+			'reply_to_message_id'  => null
+		]));
+    }
 
-        return $this->apiRequest('sendMessage', $data);
+    /**
+     * Отправляет документ (файл) в чат
+     *
+     * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param string|null $caption Подпись к документу (0-1024 символа)
+     * @param string|null $chatId ID чата (переопределяет дефолтный)
+     * @param string $parseMode Режим парсинга (HTML или Markdown)
+     * @param bool $disableNotification Отправить без уведомления
+     * @return array<string, mixed>|false
+     */
+    public function sendDocument(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false
+    {
+        return $this->apiRequest('sendDocument', $this->setData($chatId, [
+            'document' => $file,
+            'caption' => $caption,
+            'parse_mode' => $parseMode,
+            'disable_notification' => $disableNotification,
+        ]));
+    }
+
+    /**
+     * Отправляет фотографию в чат
+     *
+     * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param string|null $caption Подпись к фото (0-1024 символа)
+     * @param string|null $chatId ID чата (переопределяет дефолтный)
+     * @param string $parseMode Режим парсинга (HTML или Markdown)
+     * @param bool $disableNotification Отправить без уведомления
+     * @return array<string, mixed>|false
+     */
+    public function sendPhoto(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false 
+    {
+        return $this->apiRequest('sendPhoto', $this->setData($chatId, [
+            'photo' => $file,
+            'caption' => $caption,
+            'parse_mode' => $parseMode,
+            'disable_notification' => $disableNotification,
+        ]));
+    }
+
+    /**
+     * Отправляет аудиофайл в чат
+     *
+     * @param string|CURLFile $file File ID, URL или CURLFile
+     * @param string|null $caption Подпись (для голосовых сообщений)
+     * @param int|null $duration Длительность в секундах
+     * @param string|null $performer Исполнитель
+     * @param string|null $title Название трека
+     * @param string|null $chatId ID чата
+     * @param bool $disableNotification Отправить без уведомления
+     * @return array<string, mixed>|false
+     */
+    public function sendAudio(string|CURLFile $file,
+        ?string $title = null,
+        ?string $caption = null,
+        ?string $performer = null,
+        ?string $chatId = null, ?int $duration = null, bool $disableNotification = false): array|false
+    {
+        return $this->apiRequest('sendAudio', $this->setData($chatId, [
+            'audio' => $file,
+            'title' => $title,
+            'caption' => $caption,
+            'duration' => $duration,
+            'performer' => $performer,
+            'disable_notification' => $disableNotification,
+        ]));
+    }
+
+    /**
+     * Создать CURLFile из пути с проверкой
+     *
+     * @param string $path
+     * @return CURLFile
+     * @throws InvalidArgumentException
+     */
+    protected function makeFile(string $path): CURLFile
+    {
+        if (!is_file($path)) {
+            throw new InvalidArgumentException("File not found: {$path}");
+        }
+        
+        if (!is_readable($path)) {
+            throw new InvalidArgumentException("File not readable: {$path}");
+        }
+        
+        return new CURLFile($path);
+    }
+
+    /**
+     * Установить вебхук
+     * 
+     * @param string $url Публичный HTTPS-адрес обработчика
+     * @param list<string>|null $allUpdates
+     * @param string|null $ipAddress
+     * @return array<string, mixed>|false Массив ответа API или false при ошибке
+     */
+    public function setWebhook(string $url, array $allUpdates = null, ?string $ipAddress = null): array|false
+    {
+        return $this->apiRequest('setWebhook', [
+            'url' => $url,
+            'ip_address' => $ipAddress,
+            'allowed_updates' => $allUpdates,
+            'drop_pending_updates' => true, // Удалить старые обновления при смене
+        ]);
+    }
+
+    /**
+     * Получить информацию о текущем вебхуке
+     * 
+     * @return	array
+	 * @return array<string, mixed>|false Массив ответа API или false при ошибке
+     */
+    public function getWebhookInfo(): array|false
+    {
+        return $this->apiRequest('getWebhookInfo');
+    }
+
+    /**
+     * 
+     * Удалить вебхук (вернуться на getUpdates)
+     * @return	array
+	 * @return array<string, mixed>|false Массив ответа API или false при ошибке
+     */
+    public function deleteWebhook(): array|false
+    {
+        return $this->apiRequest('deleteWebhook');
     }
 
     /**
@@ -135,6 +245,26 @@ class Telegram
     public function getUpdates(array $params = []): array|false
     {
         return $this->apiRequest('getUpdates', $params);
+    }
+
+    /**
+     * Отправляет точку на карте (геолокацию) в чат
+     *
+     * @param float $latitude Широта
+     * @param float $longitude Долгота
+     * @param string|null $chatId ID чата (переопределяет дефолтный)
+     * @param int|null $livePeriod Время в секундах для live-локации (60–86400)
+     * @param bool $disableNotification Отправить без уведомления
+     * @return array<string, mixed>|false
+     */
+    public function sendLocation(float $latitude, float $longitude, ?string $chatId = null, ?int $livePeriod = null, bool $disableNotification = false): array|false 
+    {
+        return $this->apiRequest('sendLocation', $this->setData($chatId, [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'live_period' => $livePeriod,
+            'disable_notification' => $disableNotification,
+        ]));
     }
 
     /**
@@ -183,5 +313,18 @@ class Telegram
         }
         
         return $result;
+    }
+
+    /**
+     * Объединяет chatId с дополнительными данными
+     *
+     * @param string|null $chatId ID чата (переопределяет дефолтный)
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function setData(?string $chatId = null, array $data = []): array
+    {
+        $chatId ??= $this->chatId;
+        return ['chat_id' => $chatId] + $data;
     }
 }
