@@ -10,7 +10,8 @@ use RuntimeException;
 use InvalidArgumentException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\{
-    RequestException, ConnectionException,
+    RequestException,
+    ConnectionException,
 };
 
 class Telegram
@@ -99,6 +100,20 @@ class Telegram
     }
 
     /**
+	* Create curl file
+	*
+	* @param string $file
+	* @return string
+	*/
+	private function curlFile(string $file)
+	{
+		$file = preg_match('/(www)|(http)|(https)/i', $file)
+			? filter_var($file, FILTER_VALIDATE_URL)
+			: $file ;
+		return realpath($file) ? new CURLFile($file) : trim($file);
+	}
+
+    /**
      * Отправляет документ (файл) в чат
      *
      * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
@@ -116,6 +131,40 @@ class Telegram
             'parse_mode' => $parseMode,
             'disable_notification' => $disableNotification,
         ]));
+    }
+
+    /**
+     * Уведомление о новом посте
+     * 
+     * @param  string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param  string|null $caption
+     * @param  string|null $chatId ID чата (переопределяет дефолтный)
+     * @param  list<string>|null $buttons
+     * @return array<string, mixed>|false
+     */
+    public function sendPost(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, array $buttons = []): array|false
+    {
+        $data = [
+            'photo'   => $file,
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+        ];
+
+        if (!empty($buttons)) {
+            $keyboard = array_map(fn($btn) => [
+                ['text' => $btn['text'], 'url' => $btn['url']]
+            ], $buttons);
+    
+            $data['reply_markup'] = json_encode([
+                'inline_keyboard' => $keyboard
+            ]);
+        }    
+
+        if (is_string($file) && is_file($file)) {
+            $data['photo'] = new CURLFile($file);
+        }
+
+        return $this->apiRequest('sendPhoto', $this->setData($chatId, $data));
     }
 
     /**
