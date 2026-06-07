@@ -31,3 +31,21 @@ $config = [
 
 $telegram = (new Telegram($config))->sendMessage('Hallo world!');
 ```
+
+Поделиться постом :
+
+```php
+<?php
+include (__DIR__ . '/vendor/autoload.php');
+
+use Spolokh\Telegram\Telegram;
+
+app(Telegram::class)->sendPost(
+  public_path('uploads/posts/' . $post->image),
+  $post->excerpt,
+  buttons: [
+    ['text' => '📖 Подробнее',  'url' => route('blog.show', $post)],
+    ['text' => '🔗 Поделиться', 'url' => 'https://t.me/share/url?url=' . urlencode(route('blog.show', $post))]
+  ]
+);
+```
