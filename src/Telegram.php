@@ -54,21 +54,32 @@ class Telegram
      */
     private function apiRequest( string $method, array $data = [] ): array|false
     {
-        $host = $this->apiUrl . $this->apiKey . '/' . $method;
+        $url = $this->apiUrl . $this->apiKey . '/' . $method;
         try {
-            $request = Http::withOptions([
+
+            $fields = [];
+            $oFiles = false;
+            $client = Http::withOptions([
                 'timeout' => $this->timeout,
                 'verify' => $this->verify,
                 'proxy' => $this->buildProxyString()
-            ])
-            ->retry(3, 100, fn($e) =>
+            ])->retry(3, 100, fn($e) =>
                 $e instanceof ConnectionException, throw: false
-            )
-            ->post($host, $data)
-            ->throw()
-            ->json();
+            );
 
-            return ($request['ok'] ?? false) ? ($request['result'] ?? false) : false;
+            foreach($data as $k => $value) {
+                if ($value instanceof CURLFile) {
+                    $client->attach($k, file_get_contents($value->getFilename()), basename($value->getFilename()));
+                    $oFiles = true;
+                } else {
+                    $fields[$k] = $value;
+                }
+            }
+
+            $client = $oFiles ? $client->asMultipart()->post($url, $fields) : $client->post($url, $data);
+            $result = $client->throw()->json();
+
+            return ($result['ok'] ?? false) ? ($result['result'] ?? false) : false;
 
         } catch (Throwable $e) {
             logger()->error('Telegram API failed', [
@@ -100,20 +111,6 @@ class Telegram
     }
 
     /**
-	* Create curl file
-	*
-	* @param string $file
-	* @return string
-	*/
-	private function curlFile(string $file)
-	{
-		$file = preg_match('/(www)|(http)|(https)/i', $file)
-			? filter_var($file, FILTER_VALIDATE_URL)
-			: $file ;
-		return realpath($file) ? new CURLFile($file) : trim($file);
-	}
-
-    /**
      * Отправляет документ (файл) в чат
      *
      * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
@@ -133,17 +130,18 @@ class Telegram
         ]));
     }
 
-    /**
+     /**
      * Уведомление о новом посте
      * 
-     * @param  string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param  $file File ID, URL или CURLFile для загрузки
      * @param  string|null $caption
      * @param  string|null $chatId ID чата (переопределяет дефолтный)
      * @param  list<string>|null $buttons
      * @return array<string, mixed>|false
      */
-    public function sendPost(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, array $buttons = []): array|false
+    public function sendPost(string $file, ?string $caption = null, ?string $chatId = null, array $buttons = []): array|false
     {
+        $file = $this->curlFile($file);
         $data = [
             'photo'   => $file,
             'caption' => $caption,
@@ -152,16 +150,12 @@ class Telegram
 
         if (!empty($buttons)) {
             $keyboard = array_map(fn($btn) => [
-                ['text' => $btn['text'], 'url' => $btn['url']]
+                ['text' => $btn['text'], 'url'  => $btn['url']]
             ], $buttons);
     
             $data['reply_markup'] = json_encode([
                 'inline_keyboard' => $keyboard
             ]);
-        }    
-
-        if (is_string($file) && is_file($file)) {
-            $data['photo'] = new CURLFile($file);
         }
 
         return $this->apiRequest('sendPhoto', $this->setData($chatId, $data));
@@ -213,26 +207,6 @@ class Telegram
             'performer' => $performer,
             'disable_notification' => $disableNotification,
         ]));
-    }
-
-    /**
-     * Создать CURLFile из пути с проверкой
-     *
-     * @param string $path
-     * @return CURLFile
-     * @throws InvalidArgumentException
-     */
-    protected function makeFile(string $path): CURLFile
-    {
-        if (!is_file($path)) {
-            throw new InvalidArgumentException("File not found: {$path}");
-        }
-        
-        if (!is_readable($path)) {
-            throw new InvalidArgumentException("File not readable: {$path}");
-        }
-        
-        return new CURLFile($path);
     }
 
     /**
@@ -363,6 +337,20 @@ class Telegram
         
         return $result;
     }
+
+    /**
+	* Create curl file
+	*
+	* @param string $file
+	* @return string
+	*/
+	private function curlFile(string $file)
+	{
+		$file = preg_match('/(www)|(http)|(https)/i', $file)
+			? filter_var($file, FILTER_VALIDATE_URL)
+			:trim($file);
+		return realpath($file) ? new CURLFile($file) : $file;
+	}
 
     /**
      * Объединяет chatId с дополнительными данными
