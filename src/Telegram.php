@@ -136,7 +136,7 @@ class Telegram
      * @param  $file File ID, URL или CURLFile для загрузки
      * @param  string|null $caption
      * @param  string|null $chatId ID чата (переопределяет дефолтный)
-     * @param  list<string>|null $buttons
+     * @param  list<array{text: string, url: string}> $buttons [['text' => '...', 'url' => '...']]
      * @return array<string, mixed>|false
      */
     public function sendPost(string $file, ?string $caption = null, ?string $chatId = null, array $buttons = []): array|false
@@ -150,7 +150,7 @@ class Telegram
 
         if (!empty($buttons)) {
             $keyboard = array_map(fn($btn) => [
-                ['text' => $btn['text'], 'url'  => $btn['url']]
+                ['text' => $btn['text'], 'url' => $btn['url']]
             ], $buttons);
     
             $data['reply_markup'] = json_encode([
