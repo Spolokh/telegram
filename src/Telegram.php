@@ -67,17 +67,20 @@ class Telegram
                 $e instanceof ConnectionException, throw: false
             );
 
-            foreach($data as $k => $value) {
-                if ($value instanceof CURLFile) {
-                    $client->attach($k, file_get_contents($value->getFilename()), basename($value->getFilename()));
+            foreach($data as $k => $v) {
+                if ($v instanceof CURLFile) {
+                    $client->attach($k, file_get_contents($v->getFilename()), basename($v->getFilename()));
                     $oFiles = true;
                 } else {
-                    $fields[$k] = $value;
+                    $fields[$k] = $v;
                 }
             }
 
-            $client = $oFiles ? $client->asMultipart()->post($url, $fields) : $client->post($url, $data);
-            $result = $client->throw()->json();
+            $result = $client->when($oFiles, fn($http) =>
+                $http->asMultipart()
+            )->post($url, $oFiles ? $fields : $data)
+                ->throw()
+                ->json();
 
             return ($result['ok'] ?? false) ? ($result['result'] ?? false) : false;
 
@@ -113,17 +116,17 @@ class Telegram
     /**
      * Отправляет документ (файл) в чат
      *
-     * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param string $file File ID, URL или CURLFile для загрузки
      * @param string|null $caption Подпись к документу (0-1024 символа)
      * @param string|null $chatId ID чата (переопределяет дефолтный)
      * @param string $parseMode Режим парсинга (HTML или Markdown)
      * @param bool $disableNotification Отправить без уведомления
      * @return array<string, mixed>|false
      */
-    public function sendDocument(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false
+    public function sendDocument(string $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false
     {
         return $this->apiRequest('sendDocument', $this->setData($chatId, [
-            'document' => $file,
+            'document' => $this->curlFile($file),
             'caption' => $caption,
             'parse_mode' => $parseMode,
             'disable_notification' => $disableNotification,
@@ -141,9 +144,8 @@ class Telegram
      */
     public function sendPost(string $file, ?string $caption = null, ?string $chatId = null, array $buttons = []): array|false
     {
-        $file = $this->curlFile($file);
         $data = [
-            'photo'   => $file,
+            'photo'   => $this->curlFile($file),
             'caption' => $caption,
             'parse_mode' => 'HTML',
         ];
@@ -164,17 +166,17 @@ class Telegram
     /**
      * Отправляет фотографию в чат
      *
-     * @param string|CURLFile $file File ID, URL или CURLFile для загрузки
+     * @param string $file File ID, URL или CURLFile для загрузки
      * @param string|null $caption Подпись к фото (0-1024 символа)
      * @param string|null $chatId ID чата (переопределяет дефолтный)
      * @param string $parseMode Режим парсинга (HTML или Markdown)
      * @param bool $disableNotification Отправить без уведомления
      * @return array<string, mixed>|false
      */
-    public function sendPhoto(string|CURLFile $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false 
+    public function sendPhoto(string $file, ?string $caption = null, ?string $chatId = null, string $parseMode = 'HTML', bool $disableNotification = false): array|false 
     {
         return $this->apiRequest('sendPhoto', $this->setData($chatId, [
-            'photo' => $file,
+            'photo' => $this->curlFile($file),
             'caption' => $caption,
             'parse_mode' => $parseMode,
             'disable_notification' => $disableNotification,
@@ -184,7 +186,7 @@ class Telegram
     /**
      * Отправляет аудиофайл в чат
      *
-     * @param string|CURLFile $file File ID, URL или CURLFile
+     * @param string $file File ID, URL или CURLFile
      * @param string|null $caption Подпись (для голосовых сообщений)
      * @param int|null $duration Длительность в секундах
      * @param string|null $performer Исполнитель
@@ -193,14 +195,14 @@ class Telegram
      * @param bool $disableNotification Отправить без уведомления
      * @return array<string, mixed>|false
      */
-    public function sendAudio(string|CURLFile $file,
+    public function sendAudio(string $file,
         ?string $title = null,
         ?string $caption = null,
         ?string $performer = null,
         ?string $chatId = null, ?int $duration = null, bool $disableNotification = false): array|false
     {
         return $this->apiRequest('sendAudio', $this->setData($chatId, [
-            'audio' => $file,
+            'audio' => $this->curlFile($file),
             'title' => $title,
             'caption' => $caption,
             'duration' => $duration,
@@ -339,17 +341,17 @@ class Telegram
     }
 
     /**
-	* Create curl file
-	*
-	* @param string $file
-	* @return string
-	*/
-	private function curlFile(string $file)
+     * Подготавливает файл для отправки (URL или локальный путь)
+     *
+     * @param string $file Путь к файлу или URL
+     * @return string|CURLFile  ← 🔑 Обратный слэш для глобального класса
+     */
+	private function curlFile(string $file): string|CURLFile
 	{
 		$file = preg_match('/(www)|(http)|(https)/i', $file)
 			? filter_var($file, FILTER_VALIDATE_URL)
-			:trim($file);
-		return realpath($file) ? new CURLFile($file) : $file;
+			: trim($file);
+		return realpath($file) ? new CURLFile(realpath($file)) : $file;
 	}
 
     /**
