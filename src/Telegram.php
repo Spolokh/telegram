@@ -10,8 +10,7 @@ use RuntimeException;
 use InvalidArgumentException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\{
-    RequestException,
-    ConnectionException,
+    RequestException, ConnectionException,
 };
 
 class Telegram
@@ -342,9 +341,8 @@ class Telegram
 
     /**
      * Подготавливает файл для отправки (URL или локальный путь)
-     *
      * @param string $file Путь к файлу или URL
-     * @return string|CURLFile  ← 🔑 Обратный слэш для глобального класса
+     * @return string|CURLFile
      */
 	private function curlFile(string $file): string|CURLFile
 	{
